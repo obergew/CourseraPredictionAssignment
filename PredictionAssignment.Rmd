@@ -1,0 +1,110 @@
+---
+title: "Exercise Prediction Assignment"
+output: html_document
+author: Erik Oberg
+date: 01/28/2016
+---
+# INTRODUCTION  
+Wearable technology provides a quantative assessment of exercise performed. The data can be analyzed to make qualitative assessment of ones exercise, that is "how (well)" one is performing an exercise. This report uses data from [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har) which features sensor data on exercise being performed in one of five ways, classes A-D. In this report, using a machine learning approach, a random forest model is created that accurately predicts from a testing data set how (well) an exercise is performed by assigning it to a class A-D based on model training from a training data set. 
+
+# METHOD  
+
+## Data
+
+
+  
+  The training data for this project are available here:
+
+  [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+  The test data are available here:
+
+  [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+ 
+  This data was downloaded in R for analysis.
+  
+```{r} 
+    library(RCurl)
+    URL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    x <- getURL(URL)
+    training <- read.csv(textConnection(x))
+    
+    URL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+    x <- getURL(URL)
+    testing <- read.csv(textConnection(x))
+    
+```
+   Then the training data was further partitioned to create a training data set and a validation set.
+   
+```{r}
+   library(caret)
+   set.seed(932745) #seed set for reproducibility 
+    training_partition <- createDataPartition(training$classe, p = 0.8, list = FALSE)
+    training_df <- training[training_partition, ]
+    training_validation <- training[-training_partition, ]
+```
+   
+   Next, non-zero zero variance features were removed as they are uninformative.
+   
+```{r}
+        nzv <- nearZeroVar(training_df)
+        training_df <- training_df[, -nzv]
+        dim(training_df)
+        #We can use the following commands to see what fell out as zero or near zero variance predictors
+  
+        #nzv[nzv[,"zeroVar"] > 0, ] 
+        #nzv[nzv[,"zeroVar"] + nzv[,"nzv"] > 0, ]
+        
+        #will not run, but found 59 predictors were dropped.
+        
+```
+    To further clean the data predictors that had 30% or more missing values were exluded as well as those that where qualitative.
+  
+```{r}
+      cntlength <- sapply(training_df, function(x) {
+      sum(!(is.na(x) | x == ""))
+  })
+  nullcol <- names(cntlength[cntlength < 0.7 * length(training_df$classe)])
+  descriptcol <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", 
+      "cvtd_timestamp", "new_window", "num_window")
+  excludecols <- c(descriptcol, nullcol)
+  training_df <- training_df[, !names(training_df) %in% excludecols]
+```
+## Model
+First, the model was trained.
+```{r}
+# randomForest
+library(randomForest)
+fit.rf = randomForest(classe~.,data=training_df,importance = TRUE, ntrees = 10)
+print(fit.rf)
+#importance(fit.rf)
+plot(fit.rf)
+
+
+```
+
+Next, the model was tested on the training set and cross validation set.
+
+```{r}
+predict_answers_training <- predict(fit.rf, training_df)
+print(confusionMatrix(predict_answers_training, training_df$classe))
+
+predict_answers_validation <- predict(fit.rf, training_validation)
+print(confusionMatrix(predict_answers_validation, training_validation$classe))
+```
+ 
+The model performed well with accuracy > 99%. The random forest model was then applied to the test data set.
+
+```{r}
+predict_answers_testing <- predict(fit.rf, testing) 
+
+```
+
+# RESULTS
+```{r}
+predict_answers_testing 
+```
+
+# CONCLUSION
+
+The model accurately predicted 20/20 on the test. The random forest model appears to be quite succesful.
